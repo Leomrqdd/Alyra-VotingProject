@@ -35,8 +35,11 @@ contract Voting is Ownable {
     Proposal[] public proposals;
     WorkflowStatus public Status = WorkflowStatus.RegisteringVoters;
 
+    uint public highestVotes = 0;
+    uint public  WinnerIndex = 0;
+
     modifier onlyVoter() {
-        require (Voters[msg.sender].isRegistered == true, "you are not authorized");
+        require (Voters[msg.sender].isRegistered == true, "you are not a Voter");
         _;
     }
 
@@ -47,9 +50,10 @@ contract Voting is Ownable {
         emit VoterRegistered(_voterAddress);
     }
 
-    function getVoter(address _addr) public view returns(bool,bool,uint) {
+    function getVoter(address _addr) public view onlyVoter returns(bool,bool,uint) {
         return (Voters[_addr].isRegistered,Voters[_addr].hasVoted,Voters[_addr].votedProposalId);
     }
+
 
 
      function startProposalRegistration() public onlyOwner {
@@ -83,6 +87,46 @@ contract Voting is Ownable {
         proposals[_proposalId].voteCount ++;
         emit Voted (msg.sender,_proposalId);
     }
+
+    function EndVotingSession() public onlyOwner {
+         Status = WorkflowStatus.VotingSessionEnded;
+
+    }
+
+   function StartCountVotes() public onlyOwner {
+         Status = WorkflowStatus.VotesTallied;
+
+    }
+
+    function CountVotes() public onlyOwner returns (string memory,uint) {
+        require(Status == WorkflowStatus.VotesTallied, "the voting session is not over yet");
+        for(uint i=0;i<proposals.length; i++) {
+            if(proposals[i].voteCount>proposals[WinnerIndex].voteCount) {
+                WinnerIndex = i;
+                highestVotes = proposals[i].voteCount;
+            }
+        }
+        return (proposals[WinnerIndex].description,highestVotes);
+    }
+
+    function GetWinnerProposal() public view returns (string memory, uint) {
+        return (proposals[WinnerIndex].description,highestVotes);
+    }
+
+    
+    function HowManyProposals() public view onlyVoter returns(uint) {
+         require(Status == WorkflowStatus.ProposalsRegistrationEnded, "the registration of proposals is not over yet");
+         return(proposals.length);
+    }
+
+    function getProposalDetails(uint256 _proposalId) public view onlyVoter returns (string memory,uint) {
+        Proposal memory proposal = proposals[_proposalId];
+        return (proposal.description, proposal.voteCount);
+    }
+
+    
+
+
 
 
 }
