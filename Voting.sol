@@ -15,6 +15,7 @@ contract Voting is Ownable {
     struct Proposal {
         string description;
         uint voteCount;
+        uint creationTime;
     }
 
     enum WorkflowStatus {
@@ -55,76 +56,83 @@ contract Voting is Ownable {
     }
 
 
+     function nextVotingStatus() public onlyOwner {
+         require(Status != WorkflowStatus.VotesTallied, "It is time to choose a Winner Proposal");
+         if(Status == WorkflowStatus.RegisteringVoters) {
+             Status = WorkflowStatus.ProposalsRegistrationStarted;
+             emit WorkflowStatusChange(WorkflowStatus.RegisteringVoters, WorkflowStatus.ProposalsRegistrationStarted);    
+         }
+         else if (Status == WorkflowStatus.ProposalsRegistrationStarted) {
+             Status = WorkflowStatus.ProposalsRegistrationEnded;
+             emit WorkflowStatusChange(WorkflowStatus.ProposalsRegistrationStarted, WorkflowStatus.ProposalsRegistrationEnded);    
 
-     function startProposalRegistration() public onlyOwner {
-         Status = WorkflowStatus.ProposalsRegistrationStarted;
-     }
+         }
+        else if (Status == WorkflowStatus.ProposalsRegistrationEnded) {
+             Status = WorkflowStatus.VotingSessionStarted;
+             emit WorkflowStatusChange(WorkflowStatus.ProposalsRegistrationEnded, WorkflowStatus.VotingSessionStarted);    
+
+         }
+         else if (Status == WorkflowStatus.VotingSessionStarted) {
+             Status = WorkflowStatus.VotingSessionEnded;
+             emit WorkflowStatusChange(WorkflowStatus.VotingSessionStarted, WorkflowStatus.VotingSessionEnded);    
+
+         }
+         else if (Status == WorkflowStatus.VotingSessionEnded) {
+             Status = WorkflowStatus.VotesTallied;
+         }
+             emit WorkflowStatusChange(WorkflowStatus.VotingSessionEnded, WorkflowStatus.VotesTallied); 
+         }
+
+
 
     function addProposal(string memory _proposal) public onlyVoter {
         require(Voters[msg.sender].isRegistered == true, "you are not authorized");
-        require(Status == WorkflowStatus.ProposalsRegistrationStarted, "the registration of voters is over" );
-        Proposal memory proposal = Proposal(_proposal,0);
+        require(Status == WorkflowStatus.ProposalsRegistrationStarted, "It is not the time for the Registration to Start" );
+        Proposal memory proposal = Proposal(_proposal,0,block.timestamp);
         proposals.push(proposal);
         emit ProposalRegistered(proposals.length);
     }
 
 
-    function endProposalRegistration() public onlyOwner {
-         Status = WorkflowStatus.ProposalsRegistrationEnded;
-    }
-
-
-    function startVotingSession() public onlyOwner {
-         Status = WorkflowStatus.VotingSessionStarted;
-
-    }
-
     function Vote(uint _proposalId) public onlyVoter {
         require(Voters[msg.sender].hasVoted == false,"you have already voted");
-        require(Status == WorkflowStatus.VotingSessionStarted, "the voting session has not started yet");
+        require(Status == WorkflowStatus.VotingSessionStarted, "It is not the time for the Voting Session to start");
         Voters[msg.sender].hasVoted = true;
         Voters[msg.sender].votedProposalId =_proposalId;
         proposals[_proposalId].voteCount ++;
         emit Voted (msg.sender,_proposalId);
     }
 
-    function EndVotingSession() public onlyOwner {
-         Status = WorkflowStatus.VotingSessionEnded;
-
-    }
-
-   function StartCountVotes() public onlyOwner {
-         Status = WorkflowStatus.VotesTallied;
-
-    }
-
     function CountVotes() public onlyOwner returns (string memory,uint) {
-        require(Status == WorkflowStatus.VotesTallied, "the voting session is not over yet");
+        require(Status == WorkflowStatus.VotesTallied, "It is not the time to count the Votes");
         for(uint i=0;i<proposals.length; i++) {
             if(proposals[i].voteCount>proposals[WinnerIndex].voteCount) {
                 WinnerIndex = i;
                 highestVotes = proposals[i].voteCount;
             }
+            else if (proposals[i].voteCount==proposals[WinnerIndex].voteCount) {
+                if(proposals[i].creationTime < proposals[WinnerIndex].creationTime) {
+                    WinnerIndex = i;
+                }
+            }
         }
         return (proposals[WinnerIndex].description,highestVotes);
     }
 
-    function GetWinnerProposal() public view returns (string memory, uint) {
+    function GetWinnerProposal() public view onlyVoter returns (string memory, uint) {
+        require(Status == WorkflowStatus.VotesTallied, "It is not the time to get the Winner Proposal");
         return (proposals[WinnerIndex].description,highestVotes);
     }
 
     
     function HowManyProposals() public view onlyVoter returns(uint) {
-         require(Status == WorkflowStatus.ProposalsRegistrationEnded, "the registration of proposals is not over yet");
+         require(Status != WorkflowStatus.RegisteringVoters, "the registration of proposals has not started");
          return(proposals.length);
     }
 
-    function getProposalDetails(uint256 _proposalId) public view onlyVoter returns (string memory,uint) {
-        Proposal memory proposal = proposals[_proposalId];
-        return (proposal.description, proposal.voteCount);
-    }
 
-    
+
+
 
 
 
