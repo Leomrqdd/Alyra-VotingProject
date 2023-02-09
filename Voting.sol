@@ -27,18 +27,24 @@ contract Voting is Ownable {
         VotesTallied
     }
 
+    mapping (address => Voter) Voters ;
+    uint public highestVotes = 0;
+    uint public  WinnerIndex = 0;
+
+    Proposal[] public proposals;
+    WorkflowStatus public Status ;
+
+
     event VoterRegistered(address voterAddress); 
     event WorkflowStatusChange(WorkflowStatus previousStatus, WorkflowStatus newStatus);
     event ProposalRegistered(uint proposalId);
     event Voted (address voter, uint proposalId);
 
-    mapping (address => Voter) Voters ;
-    Proposal[] public proposals;
-    WorkflowStatus public Status = WorkflowStatus.RegisteringVoters;
+    constructor() {
+        Status = WorkflowStatus.RegisteringVoters;
+    }
 
-    uint public highestVotes = 0;
-    uint public  WinnerIndex = 0;
-
+ 
     modifier onlyVoter() {
         require (Voters[msg.sender].isRegistered == true, "you are not a Voter");
         _;
