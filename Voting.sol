@@ -28,11 +28,12 @@ contract Voting is Ownable {
     }
 
     mapping (address => Voter) Voters ;
-    uint public highestVotes = 0;
-    uint public  WinnerIndex = 0;
+    uint public highestVotes ;
+    uint private  WinnerIndex ;
 
     Proposal[] public proposals;
     WorkflowStatus public Status ;
+    address[] public addressesOfVoters; //WARNING : only to use if you want your contract to be able to restart a voting session, can consume large quantity of gas
 
 
     event VoterRegistered(address voterAddress); 
@@ -42,6 +43,7 @@ contract Voting is Ownable {
 
     constructor() {
         Status = WorkflowStatus.RegisteringVoters;
+        WinnerIndex = 0;
     }
 
  
@@ -50,19 +52,8 @@ contract Voting is Ownable {
         _;
     }
 
-    function addVoter (address _voterAddress) public onlyOwner {
-        require(Voters[_voterAddress].isRegistered != true, "this Voter is already registered");
-        require(Status == WorkflowStatus.RegisteringVoters, "the registration of voters is over" );
-        Voters[_voterAddress].isRegistered = true;
-        emit VoterRegistered(_voterAddress);
-    }
-
-    function getVoter(address _addr) public view onlyVoter returns(bool,bool,uint) {
-        return (Voters[_addr].isRegistered,Voters[_addr].hasVoted,Voters[_addr].votedProposalId);
-    }
-
-
-     function nextVotingStatus() public onlyOwner {
+     function nextVotingStatus() external onlyOwner {
+         //Change the VotingStatus to the next one
          require(Status != WorkflowStatus.VotesTallied, "It is time to choose a Winner Proposal");
          if(Status == WorkflowStatus.RegisteringVoters) {
              Status = WorkflowStatus.ProposalsRegistrationStarted;
@@ -89,32 +80,46 @@ contract Voting is Ownable {
              emit WorkflowStatusChange(WorkflowStatus.VotingSessionEnded, WorkflowStatus.VotesTallied); 
          }
 
+    
 
-
-    function addProposal(string memory _proposal) public onlyVoter {
-        require(Voters[msg.sender].isRegistered == true, "you are not authorized");
-        require(Status == WorkflowStatus.ProposalsRegistrationStarted, "It is not the time for the Registration to Start" );
-        Proposal memory proposal = Proposal(_proposal,0,block.timestamp);
-        proposals.push(proposal);
-        emit ProposalRegistered(proposals.length);
+    function addVoter (address _voterAddress) external onlyOwner {
+        //Add a Voter to a Whitelist
+        require(Voters[_voterAddress].isRegistered != true, "this Voter is already registered");
+        require(Status == WorkflowStatus.RegisteringVoters, "the registration of voters is over" );
+        Voters[_voterAddress].isRegistered = true;
+        addressesOfVoters.push(_voterAddress);
+        emit VoterRegistered(_voterAddress);
     }
 
 
-    function Vote(uint _proposalId) public onlyVoter {
+    function addProposal(string memory _proposal) external onlyVoter {
+        //Add a Proposal in the dynamic array proposals
+        require(Voters[msg.sender].isRegistered == true, "you are not authorized");
+        require(Status == WorkflowStatus.ProposalsRegistrationStarted, "It is not the time to add a Proposal" );
+        Proposal memory proposal = Proposal(_proposal,0,block.timestamp);
+        proposals.push(proposal);
+        emit ProposalRegistered(proposals.length-1);
+    }
+
+
+    function Vote(uint _proposalId) external onlyVoter {
+        //If you are a Voter : Vote for a Proposal
+        //proposalId starts at 0
         require(Voters[msg.sender].hasVoted == false,"you have already voted");
         require(Status == WorkflowStatus.VotingSessionStarted, "It is not the time for the Voting Session to start");
+        require(_proposalId>=0,"choose a positive number");
         Voters[msg.sender].hasVoted = true;
         Voters[msg.sender].votedProposalId =_proposalId;
         proposals[_proposalId].voteCount ++;
         emit Voted (msg.sender,_proposalId);
     }
 
-    function CountVotes() public onlyOwner returns (string memory,uint) {
-        require(Status == WorkflowStatus.VotesTallied, "It is not the time to count the Votes");
+    function CountVotes() external onlyOwner returns (string memory,uint) {
+        //Count the Votes of all the proposals
+        require(Status == WorkflowStatus.VotingSessionEnded, "It is not the time to count the Votes");
         for(uint i=0;i<proposals.length; i++) {
             if(proposals[i].voteCount>proposals[WinnerIndex].voteCount) {
                 WinnerIndex = i;
-                highestVotes = proposals[i].voteCount;
             }
             else if (proposals[i].voteCount==proposals[WinnerIndex].voteCount) {
                 if(proposals[i].creationTime < proposals[WinnerIndex].creationTime) {
@@ -122,24 +127,49 @@ contract Voting is Ownable {
                 }
             }
         }
-        return (proposals[WinnerIndex].description,highestVotes);
+        return (proposals[WinnerIndex].description,proposals[WinnerIndex].voteCount);
     }
 
-    function GetWinnerProposal() public view onlyVoter returns (string memory, uint) {
+    function GetWinnerProposal() external view onlyVoter returns (string memory, uint) {
         require(Status == WorkflowStatus.VotesTallied, "It is not the time to get the Winner Proposal");
-        return (proposals[WinnerIndex].description,highestVotes);
+        return (proposals[WinnerIndex].description,proposals[WinnerIndex].voteCount);
     }
 
-    
-    function HowManyProposals() public view onlyVoter returns(uint) {
+
+    function getVoter(address _addr) external view onlyVoter returns(bool,bool,uint) {
+        return (Voters[_addr].isRegistered,Voters[_addr].hasVoted,Voters[_addr].votedProposalId);
+    }
+
+
+    function HowManyProposals() external view onlyVoter returns(uint) {
          require(Status != WorkflowStatus.RegisteringVoters, "the registration of proposals has not started");
          return(proposals.length);
     }
 
 
+    function resetVotingSession() external onlyOwner {
+        // Allow the Owner to restart the Voting Session (Voters, proposals, Status)
+        require(Status==WorkflowStatus.VotesTallied, "It is not the time to restart the current Voting Session");
+        Status = WorkflowStatus.RegisteringVoters;
+        highestVotes = 0;
+        WinnerIndex = 0;
+
+        while (proposals.length > 0) {
+            proposals.pop();
+        }
+
+        for (uint i=0;i<addressesOfVoters.length;i++) {
+            Voters[addressesOfVoters[i]].isRegistered=false;
+            Voters[addressesOfVoters[i]].hasVoted=false;
+            Voters[addressesOfVoters[i]].votedProposalId=0;
+        }
+
+        while (addressesOfVoters.length > 0) {
+         addressesOfVoters.pop();
+        }
 
 
-
+    }
 
 
 
