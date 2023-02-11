@@ -31,7 +31,7 @@ contract Voting is Ownable {
     uint private highestVotes ;
     uint private  WinnerIndex ;
 
-    Proposal[] public proposals;
+    Proposal[] private proposals;
     WorkflowStatus public Status ;
     address[] private addressesOfVoters; // OPTIONAL : only to use if you want your contract to be able to restart a voting session, can consume large quantity of gas
 
@@ -149,6 +149,12 @@ contract Voting is Ownable {
     function HowManyProposals() external view onlyVoter returns(uint) {
          require(Status != WorkflowStatus.RegisteringVoters, "the registration of proposals has not started");
          return(proposals.length);
+    }
+
+    function GetProposal(uint _proposalId) external view onlyVoter returns(string memory description,uint voteCount,uint creationTime) {
+        //proposalId starts at 0
+        require(_proposalId<proposals.length,"this proposalId does not exist");
+        return (proposals[_proposalId].description,proposals[_proposalId].voteCount,proposals[_proposalId].creationTime);
     }
 
 
