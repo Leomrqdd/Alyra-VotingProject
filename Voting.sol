@@ -28,12 +28,12 @@ contract Voting is Ownable {
     }
 
     mapping (address => Voter) Voters ;
-    uint public highestVotes ;
+    uint private highestVotes ;
     uint private  WinnerIndex ;
 
     Proposal[] public proposals;
     WorkflowStatus public Status ;
-    address[] public addressesOfVoters; //WARNING : only to use if you want your contract to be able to restart a voting session, can consume large quantity of gas
+    address[] private addressesOfVoters; // OPTIONAL : only to use if you want your contract to be able to restart a voting session, can consume large quantity of gas
 
 
     event VoterRegistered(address voterAddress); 
@@ -94,8 +94,12 @@ contract Voting is Ownable {
 
     function addProposal(string memory _proposal) external onlyVoter {
         //Add a Proposal in the dynamic array proposals
-        require(Voters[msg.sender].isRegistered == true, "you are not authorized");
+        require(Voters[msg.sender].isRegistered == true, "you are not a Voter");
         require(Status == WorkflowStatus.ProposalsRegistrationStarted, "It is not the time to add a Proposal" );
+        for(uint i=0;i<proposals.length;i++) {
+            require(StringEquals(proposals[i].description,_proposal)==false, "the Proposal has been already proposed");
+                }
+
         Proposal memory proposal = Proposal(_proposal,0,block.timestamp);
         proposals.push(proposal);
         emit ProposalRegistered(proposals.length-1);
@@ -108,6 +112,7 @@ contract Voting is Ownable {
         require(Voters[msg.sender].hasVoted == false,"you have already voted");
         require(Status == WorkflowStatus.VotingSessionStarted, "It is not the time for the Voting Session to start");
         require(_proposalId>=0,"choose a positive number");
+        require(_proposalId<proposals.length, "this proposalId does not exist");
         Voters[msg.sender].hasVoted = true;
         Voters[msg.sender].votedProposalId =_proposalId;
         proposals[_proposalId].voteCount ++;
@@ -169,8 +174,17 @@ contract Voting is Ownable {
         }
 
 
+
+
     }
 
+    function StringEquals(string memory _a, string memory _b) private pure returns(bool) {
+         bool equality ;
+        if ( keccak256( abi.encodePacked(_a) ) == keccak256( abi.encodePacked(_b) ) ){
+            equality=true;
+        }
+        return equality;
+    }    
 
 
 }
