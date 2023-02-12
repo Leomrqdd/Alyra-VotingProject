@@ -7,18 +7,21 @@ import "https://github.com/OpenZeppelin/openzeppelin-contracts/blob/master/contr
 contract Voting is Ownable {
 
     struct Voter {
+        //Describes a data structure type associated with each Voter
     bool isRegistered;
     bool hasVoted;
     uint votedProposalId;
     }
 
     struct Proposal {
+        //Describes a data structure type associated with each Proposal made by a Voter during a Voting Session
         string description;
         uint voteCount;
         uint creationTime;
     }
 
     enum WorkflowStatus {
+        //Describes the Status of the Vote 
         RegisteringVoters,
         ProposalsRegistrationStarted,
         ProposalsRegistrationEnded,
@@ -28,12 +31,11 @@ contract Voting is Ownable {
     }
 
     mapping (address => Voter) Voters ;
-    uint private highestVotes ;
     uint private  WinnerIndex ;
 
     Proposal[] private proposals;
     WorkflowStatus public Status ;
-    address[] private addressesOfVoters; // OPTIONAL : only to use if you want your contract to be able to restart a voting session, can consume large quantity of gas
+    address[] private addressesOfVoters; // OPTIONAL : only to use if you want your contract to be able to restart a voting session
 
 
     event VoterRegistered(address voterAddress); 
@@ -42,12 +44,14 @@ contract Voting is Ownable {
     event Voted (address voter, uint proposalId);
 
     constructor() {
+        //Initialize the variables 
         Status = WorkflowStatus.RegisteringVoters;
         WinnerIndex = 0;
     }
 
  
     modifier onlyVoter() {
+        //Limit the access only to the Voters
         require (Voters[msg.sender].isRegistered == true, "you are not a Voter");
         _;
     }
@@ -83,7 +87,7 @@ contract Voting is Ownable {
     
 
     function addVoter (address _voterAddress) external onlyOwner {
-        //Add a Voter to a Whitelist
+        //Add a Voter to a Whitelist and make him Registered
         require(Voters[_voterAddress].isRegistered != true, "this Voter is already registered");
         require(Status == WorkflowStatus.RegisteringVoters, "the registration of voters is over" );
         Voters[_voterAddress].isRegistered = true;
@@ -107,7 +111,7 @@ contract Voting is Ownable {
 
 
     function Vote(uint _proposalId) external onlyVoter {
-        //If you are a Voter : Vote for a Proposal
+        //Allow each Voter to vote for one Proposal 
         //proposalId starts at 0
         require(Voters[msg.sender].hasVoted == false,"you have already voted");
         require(Status == WorkflowStatus.VotingSessionStarted, "It is not the time for the Voting Session to start");
@@ -120,7 +124,7 @@ contract Voting is Ownable {
     }
 
     function CountVotes() external onlyOwner returns (string memory,uint) {
-        //Count the Votes of all the proposals
+        //Compare the Votes of all the proposals 
         require(Status == WorkflowStatus.VotingSessionEnded, "It is not the time to count the Votes");
         for(uint i=0;i<proposals.length; i++) {
             if(proposals[i].voteCount>proposals[WinnerIndex].voteCount) {
@@ -135,23 +139,27 @@ contract Voting is Ownable {
         return (proposals[WinnerIndex].description,proposals[WinnerIndex].voteCount);
     }
 
-    function GetWinnerProposal() external view onlyVoter returns (string memory, uint) {
+    function GetWinnerProposal() external view onlyVoter returns (string memory description, uint voteCount) {
+        //Return the Winner Proposal with the largest amount of votes
         require(Status == WorkflowStatus.VotesTallied, "It is not the time to get the Winner Proposal");
         return (proposals[WinnerIndex].description,proposals[WinnerIndex].voteCount);
     }
 
 
-    function getVoter(address _addr) external view onlyVoter returns(bool,bool,uint) {
+    function getVoter(address _addr) external view onlyVoter returns(bool isRegistered,bool hasVoted,uint votedProposalId) {
+        //Return all the info about a Voter 
         return (Voters[_addr].isRegistered,Voters[_addr].hasVoted,Voters[_addr].votedProposalId);
     }
 
 
     function HowManyProposals() external view onlyVoter returns(uint) {
+        //Return the number of Proposal at a given time
          require(Status != WorkflowStatus.RegisteringVoters, "the registration of proposals has not started");
          return(proposals.length);
     }
 
-    function GetProposal(uint _proposalId) external view onlyVoter returns(string memory description,uint voteCount,uint creationTime) {
+    function GetProposalbyId(uint _proposalId) external view onlyVoter returns(string memory description,uint voteCount,uint creationTime) {
+        //Get information about a Proposal 
         //proposalId starts at 0
         require(_proposalId<proposals.length,"this proposalId does not exist");
         return (proposals[_proposalId].description,proposals[_proposalId].voteCount,proposals[_proposalId].creationTime);
@@ -159,10 +167,10 @@ contract Voting is Ownable {
 
 
     function resetVotingSession() external onlyOwner {
-        // Allow the Owner to restart the Voting Session (Voters, proposals, Status)
+        // OPTIONAL : Allow the Owner to restart the Voting Session (Voters, proposals, Status), 
+        // Can consume large quantity of gas
         require(Status==WorkflowStatus.VotesTallied, "It is not the time to restart the current Voting Session");
         Status = WorkflowStatus.RegisteringVoters;
-        highestVotes = 0;
         WinnerIndex = 0;
 
         while (proposals.length > 0) {
@@ -185,6 +193,7 @@ contract Voting is Ownable {
     }
 
     function StringEquals(string memory _a, string memory _b) private pure returns(bool) {
+        //To be used internally in this contract 
          bool equality ;
         if ( keccak256( abi.encodePacked(_a) ) == keccak256( abi.encodePacked(_b) ) ){
             equality=true;
